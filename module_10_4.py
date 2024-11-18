@@ -1,28 +1,70 @@
+import threading
 import time
-from multiprocessing import Pool
+import random
+from queue import Queue
 
-def read_info(name):
-    all_data = []
-    with open(name, 'r') as file:
-        while True:
-            line = file.readline()
-            if not line:
-                break
-            all_data.append(line)
 
-if __name__ == "__main__":
-    filenames = [f'./file {number}.txt' for number in range(1, 5)]
+class Table:
+    def __init__(self, number):
+        self.number = number
+        self.guest = None
 
-    # Линейный вызов
-    start_time = time.time()
-    for filename in filenames:
-        read_info(filename)
-    end_time = time.time()
-    print(f"Линейный вызов: {end_time - start_time:.6f} секунд")
 
-    # Многопроцессный вызов
-    start_time = time.time()
-    with Pool(processes=len(filenames)) as pool:
-        pool.map(read_info, filenames)
-    end_time = time.time()
-    print(f"Многопроцессный вызов: {end_time - start_time:.6f} секунд")
+class Guest(threading.Thread):
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def run(self):
+        time.sleep(random.randint(3, 10))
+
+
+class Cafe:
+    def __init__(self, *tables):
+        self.queue = Queue()
+        self.tables = list(tables)
+
+    def guest_arrival(self, *guests):
+        for guest in guests:
+            for table in self.tables:
+                if table.guest is None:
+                    table.guest = guest
+                    guest.start()
+                    print(f"{guest.name} сел(-а) за стол номер {table.number}")
+                    break
+            else:
+                self.queue.put(guest)
+                print(f"{guest.name} в очереди")
+
+    def discuss_guests(self):
+        while not self.queue.empty() or any(table.guest for table in self.tables):
+            for table in self.tables:
+                if table.guest and not table.guest.is_alive():
+                    print(f"{table.guest.name} покушал(-а) и ушёл(ушла)")
+                    print(f"Стол номер {table.number} свободен")
+                    table.guest = None
+
+                if table.guest is None and not self.queue.empty():
+                    new_guest = self.queue.get()
+                    table.guest = new_guest
+                    new_guest.start()
+                    print(f"{new_guest.name} вышел(-ла) из очереди и сел(-а) за стол номер {table.number}")
+
+            time.sleep(0.5)
+
+
+# Создание столов
+tables = [Table(number) for number in range(1, 6)]
+# Имена гостей
+guests_names = [
+    "Maria", "Oleg", "Vakhtang", "Sergey", "Darya", "Arman",
+    "Vitoria", "Nikita", "Galina", "Pavel", "Ilya", "Alexandra"
+]
+# Создание гостей
+guests = [Guest(name) for name in guests_names]
+# Заполнение кафе столами
+cafe = Cafe(*tables)
+# Приём гостей
+cafe.guest_arrival(*guests)
+# Обслуживание гостей
+cafe.discuss_guests()
